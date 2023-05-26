@@ -1,38 +1,33 @@
 async function findFreeIp(netId) {
-  let url = 'https://vps.smartape.net/vm/v3/ip?orderby=ip_addr%20asc&limit=0,300&where=((network%20EQ%20' + netId + '))';
-  let response = await fetch(url, {
-    headers: {
-      'isp-box-instance': 'true',
-    },
-  });
+  const url = `https://vps.smartape.net/vm/v3/ip?orderby=ip_addr%20asc&limit=0,512&where=((network%20EQ%20${netId}))`;
 
-  let json = {};
+  const response = await fetch(url, { headers: { 'isp-box-instance': 'true' } });
 
-  if (response.ok) {
-    json = await response.json();
-  } else {
-    console.log('Ошибка HTTP: ' + response.status);
+  if (!response.ok) {
+    console.error(`HTTP Error when calling API: ${response.status}`);
+    return [];
   }
 
-  let netMasks = (number) => {
-    return Math.pow(2, 32 - number);
-  };
+  const json = await response.json();
 
-  let subnetMask = json.list[0].ipnet_name.split('/')[1];
-  let subnetAddress = json.list[0].ipnet_name.split('/')[0];
+  const getNetworkMasks = (number) => 2 ** (32 - number);
 
-  let sortedList = json.list.sort((a, b) => parseInt(a.ip_addr.split('.')[3]) - parseInt(b.ip_addr.split('.')[3]));
+  const subnetMask = json.list[0].ipnet_name.split('/')[1];
+  const subnetAddress = json.list[0].ipnet_name.split('/')[0];
 
-  let netName = subnetAddress.split('.').slice(0, 3).join('.');
-  let netNameNum = subnetAddress.split('.').slice(3, 4);
+  const sortedList = json.list.sort((a, b) => parseInt(a.ip_addr.split('.')[3], 10) - parseInt(b.ip_addr.split('.')[3], 10));
 
-  let startNum = parseInt(netNameNum) + 1;
-  let endNum = parseInt(netNameNum) + parseInt(netMasks(parseInt(subnetMask)));
+  const networkName = subnetAddress.split('.').slice(0, 3).join('.');
+  const networkNameNumber = subnetAddress.split('.').slice(3, 4);
 
-  let freeIp = [];
-  for (let i = startNum; i < endNum; i++) {
-    freeIp.push(netName + '.' + i);
+  const startNum = parseInt(networkNameNumber, 10) + 1;
+  const endNum = parseInt(networkNameNumber, 10) + parseInt(getNetworkMasks(parseInt(subnetMask, 10)), 10);
+
+  const freeIp = [];
+  for (let i = startNum; i < endNum; i += 1) {
+    freeIp.push(`${networkName}.${i}`);
   }
   return freeIp.filter((el) => !sortedList.map((el2) => el2.ip_addr).includes(el));
 }
+
 findFreeIp(window.location.pathname.split('/').slice(5, 6)).then((result) => console.log(result));
